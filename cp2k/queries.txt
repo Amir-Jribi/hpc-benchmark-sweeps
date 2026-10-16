@@ -1,0 +1,21 @@
+$  sqlite3 "cp2k-H2O256-n32-c1.sqlite" .tables
+$ sqlite3 "cp2k-H2O256-n32-c1.sqlite" "SELECT name FROM sqlite_master  WHERE type='table' AND name LIKE '%MPI%';"
+$ sqlite3 "cp2k-H2O256-n32-c1.sqlite" ".schema MPI_COLLECTIVES_EVENTS"
+$ sqlite3 "cp2k-H2O256-n32-c1.sqlite" "SELECT
+    s.value AS mpi_operation,
+    COUNT(*) AS calls
+FROM MPI_COLLECTIVES_EVENTS e
+JOIN StringIds s ON e.textId = s.id
+GROUP BY s.value
+ORDER BY calls DESC;"
+
+$ sqlite3 -header -csv cp2k-H2O256-n32-c1.sqlite "
+SELECT
+    s.value AS operation,
+    (e.end - e.start) / 1e6 AS duration_ms
+FROM MPI_COLLECTIVES_EVENTS e
+JOIN StringIds s ON e.textId = s.id
+WHERE s.value IN ('MPI_Allreduce', 'MPI_Alltoallv')
+  AND e.end IS NOT NULL
+  AND e.end >= e.start;
+" > mpi_durations.csv

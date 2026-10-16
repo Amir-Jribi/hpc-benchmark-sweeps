@@ -1,0 +1,66 @@
+#!/bin/bash
+
+#SBATCH --job-name="cp2k-__INPUT_FILE__-n__NODES__-c__CPUS__"
+#SBATCH --nodes=__NODES__
+#SBATCH --ntasks=__NTASKS__
+#SBATCH --cpus-per-task=__CPUS__
+#SBATCH --output=__OUTDIR__/cp2k_%j.out
+#SBATCH --error=__OUTDIR__/cp2k_%j.err
+
+ml purge
+ml load CP2K/2023.1-foss-2023a
+
+INPUT_DIR=${INPUT_DIR:-$SLURM_SUBMIT_DIR/input}
+USE_HYPERFINE=${USE_HYPERFINE:-0}
+
+export OMP_NUM_THREADS=__CPUS__
+
+echo "=========================================="
+echo "CP2K __INPUT_FILE__ benchmark"
+echo "=========================================="
+echo "Nodes:          __NODES__"
+echo "NTASKS:         __NTASKS__"
+echo "CPUs/task:      __CPUS__"
+echo "Total CPUs:     __TOTAL_CPUS__"
+echo "=========================================="
+
+cd "__OUTDIR__" || exit 1
+
+rm -f __INPUT_FILE__.out
+rm -f __INPUT_FILE__-*.ener
+rm -f __INPUT_FILE__-pos-*.xyz
+
+export OMPI_MCA_btl='^uct,ofi'
+export OMPI_MCA_pml='ucx'
+export OMPI_MCA_mtl='^ofi'
+
+
+export PATH=$PATH:/home/amir.jribi-ext/lustre/sw_stack-373lcd9r8io/users/amir.jribi-ext/software-install/hyperfine/hyperfine-v1.20.0-x86_64-unknown-linux-gnu
+
+if [[ $USE_HYPERFINE == "1" ]]; then
+hyperfine --warmup 1 --runs 3 \
+    --prepare "rm __INPUT_FILE__* || true" \
+     "srun --mpi=pmix  cp2k.psmp -i $INPUT_DIR/__INPUT_FILE__.inp -o __INPUT_FILE__.out"
+
+else 
+     srun --mpi=pmix  cp2k.psmp -i $INPUT_DIR/__INPUT_FILE__.inp -o __INPUT_FILE__.out
+fi
+
+
+RESULTS_FILE_PATH=$SLURM_SUBMIT_DIR/results-__INPUT_FILE__-nodes__NODES__-cpus__CPUS__.txt
+touch $RESULTS_FILE_PATH
+
+
+echo "###########################################"  >> $RESULTS_FILE_PATH
+
+
+echo __INPUT_FILE__-nodes__NODES__-cpus__CPUS__ >> $RESULTS_FILE_PATH
+
+
+grep "CP2K     " __INPUT_FILE__.out >> $RESULTS_FILE_PATH
+
+echo "###########################################" >> $RESULTS_FILE_PATH
+
+
+
+
